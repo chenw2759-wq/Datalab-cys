@@ -609,10 +609,8 @@ int bitCount(int x) {
  *   Max ops: 34
  *   Rating: 10
  */
-int bitReverse(int x)
-{
-  int bitReverse(int x) {
-  unsigned int y = x, m1, m2, m3, m4;
+int bitReverse(int x) {
+  int y = x, m1, m2, m3, m4;
   /* 生成掩码 */
   m3 = 0x0F | (0x0F << 8);
   m3 = m3 | (m3 << 16);
@@ -627,5 +625,5 @@ int bitReverse(int x)
   y = (y >> 16) | (y << 16);
   return y;
 }
-}
-}
+
+
