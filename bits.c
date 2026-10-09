@@ -234,7 +234,7 @@ int secondLowestZeroBit(int x) {
 int x1=(~x&(x+1));  //取出最低位置的0位
 int x2=(x1|x);  //通过或把最低的0变为1，其他不变；
 int x3=(~x2&(x2+1));  //再来一遍
-  return (int)x3;
+  return x3;
 }
 
 // P8
@@ -325,27 +325,24 @@ int midpointTowardFirst(int x, int y) {
  *   Rating: 7
  */
 int isBetweenEitherOrder(int x, int a, int b) {
-  int sx = x >> 31;   //原先减法溢出了。但我不知道如何做，所以这个代码AI辅助
-  int sa = a >> 31;
-  int sb = b >> 31;
-  
-  int dxa = x - a;
-  int sxa = dxa >> 31;
-  int x_ge_a = ((sx ^ sa) & ~sx & 1) | (~(sx ^ sa) & ~sxa & 1);
-  
-  int dbx = b - x;
-  int sbx = dbx >> 31;
-  int b_ge_x = ((sb ^ sx) & ~sb & 1) | (~(sb ^ sx) & ~sbx & 1);
-  
-  int dxb = x - b;
-  int sxb = dxb >> 31;
-  int x_ge_b = ((sx ^ sb) & ~sx & 1) | (~(sx ^ sb) & ~sxb & 1);
-  
-  int dax = a - x;
-  int sax = dax >> 31;
-  int a_ge_x = ((sa ^ sx) & ~sa & 1) | (~(sa ^ sx) & ~sax & 1);
-  
-  return (x_ge_a & b_ge_x) | (x_ge_b & a_ge_x);
+    //原先减法溢出了。但我不知道如何做，所以这个代码AI辅助
+  int dxa = x + ~a + 1;
+  int of_a = (x ^ a) & (x ^ dxa);
+  int x_ge_a = ~((dxa ^ of_a) >> 31);
+
+  int dxb = x + ~b + 1;
+  int of_b = (x ^ b) & (x ^ dxb);
+  int x_ge_b = ~((dxb ^ of_b) >> 31);
+
+  int dax = a + ~x + 1;
+  int of_ax = (a ^ x) & (a ^ dax);
+  int a_ge_x = ~((dax ^ of_ax) >> 31);
+
+  int dbx = b + ~x + 1;
+  int of_bx = (b ^ x) & (b ^ dbx);
+  int b_ge_x = ~((dbx ^ of_bx) >> 31);
+
+  return ((x_ge_a & b_ge_x) | (x_ge_b & a_ge_x)) & 1;
 }
 
 // P13
@@ -358,17 +355,15 @@ int isBetweenEitherOrder(int x, int a, int b) {
  *   Rating: 7
  */
 int mul5Sat(int x) {
-  int mul5 = (x << 2) + x;
   int sign = x >> 31;
-  int pos_thresh = 0x19999999;
-  int neg_thresh = 0xE6666667;
-  int thresh = (sign & neg_thresh) | (~sign & pos_thresh);
-  int diff = x - thresh;
+  int abs_x = (x + sign) ^ sign;               // |x|
+  int pos_thresh = (0x19 << 24) | (0x99 << 16) | (0x99 << 8) | 0x99; // 0x19999999
+  int diff = abs_x + ~pos_thresh + 1;          // |x| - 0x19999999
   int diff_sign = diff >> 31;
-  int diff_nonzero = !!diff;
-  int overflow = ((~sign) & ~diff_sign & diff_nonzero) | (sign & diff_sign & diff_nonzero);
-  int mask = ~(overflow - 1);
-  int sat_val = (sign & 0x80000000) | (~sign & 0x7FFFFFFF);
+  int overflow = ~diff_sign & !!diff;          // 1 表示溢出
+  int mask = ~overflow + 1;                    // 溢出时 mask = -1，否则 0
+  int mul5 = (x << 2) + x;
+  int sat_val = ~(sign ^ (1 << 31));           // INT_MAX 或 INT_MIN
   return (mask & sat_val) | (~mask & mul5);  //原本溢出判断只检查符号，但三正可为正！！故会漏判，只能用阈值！但我不会改，只能让AI帮我写代码。。。
 }
 
@@ -382,25 +377,37 @@ int mul5Sat(int x) {
  *   Rating: 7
  */
 int classifyAdd3(int x, int y, int z) {
-  int sign_x = x >> 31;
-  int sign_y = y >> 31;
-  int sign_z = z >> 31;
-  
-  int s1 = x + y;
+   int s1 = x + y;
   int c1 = ((x & y) | ((x | y) & ~s1)) >> 31 & 1;
   int s2 = s1 + z;
   int c2 = ((s1 & z) | ((s1 | z) & ~s2)) >> 31 & 1;
-  int sum_low = s2;
   int carry = c1 + c2;
-  int sum_high = sign_x + sign_y + sign_z + carry;
-  
+
+  int sx = (x >> 31) & 1;
+  int sy = (y >> 31) & 1;
+  int sz = (z >> 31) & 1;
+  int sign_sum = sx + sy + sz;
+  int high = carry + ~sign_sum + 1;      // high = carry - sign_sum
+
+  int sum_low = s2;
   int sign_low = sum_low >> 31;
-  int overflow = (sum_high != sign_low);
-  int result = 0;
-  if (overflow) {
-    result = (sum_high >> 31) | 1;
-  }
-  return result;
+  int low_neg = sign_low & 1;
+
+  int high_sign = high >> 31;
+  int high_nonzero = !!high;
+  int high_gt_zero = high_nonzero & ~high_sign & 1;
+  int high_eq_zero = !high;
+  int overflow_pos = high_gt_zero | (high_eq_zero & low_neg);
+
+  int high_plus_1 = high + 1;
+  int high_plus_1_sign = high_plus_1 >> 31;
+  int high_lt_minus_1 = high_plus_1_sign & 1;
+  int high_eq_minus_1 = !(high + 1);
+  int low_nonneg = ~sign_low & 1;
+  int overflow_neg = high_lt_minus_1 | (high_eq_minus_1 & low_nonneg);
+
+  int neg_result = overflow_neg << 31 >> 31;
+  return overflow_pos | neg_result;
 
 }   //原先中间溢出会相互抵消！所以现在用高位计数法，最后再判断符号位是否溢出。这个方法也是AI想的，我不会。。。
 
@@ -568,15 +575,29 @@ unsigned float_i2f(int x) {
  *   Rating: 10
  */
 int bitCount(int x) {
-  int m1=0x55555555;  //01交替掩码
-  int m2=0x33333333;  //0011交替掩码
-  int m4=0x0F0F0F0F;  //00001111交替掩码
-  int m8=0x00FF00FF;  //低8位掩码
-  x=(x&m1)+((x>>1)&m1);  //每2位里的1的个数放进各自的2位
-  x=(x&m2)+((x>>2)&m2);  //相邻2位相加，每4位里的个数
-  x=(x&m4)+((x>>4)&m4);  //相邻4位相加，每8位里的个数
-  x=(x&m8)+((x>>8)&m8);  //相邻8位相加，每16位里的个数
-  return (x&0xFFFF)+((x>>16)&0xFFFF);  //高低16位相加得总数
+  int m1 = 0x55;
+  m1 = m1 | (m1 << 8);
+  m1 = m1 | (m1 << 16);
+
+  int m2 = 0x33;
+  m2 = m2 | (m2 << 8);
+  m2 = m2 | (m2 << 16);
+
+  int m4 = 0x0F;
+  m4 = m4 | (m4 << 8);
+  m4 = m4 | (m4 << 16);
+
+  int m8 = 0xFF;
+  m8 = m8 | (m8 << 16);
+
+  int m16 = 0xFF;
+  m16 = m16 | (m16 << 8);
+
+  x = (x & m1) + ((x >> 1) & m1);
+  x = (x & m2) + ((x >> 2) & m2);
+  x = (x & m4) + ((x >> 4) & m4);
+  x = (x & m8) + ((x >> 8) & m8);
+  return (x & m16) + ((x >> 16) & m16);  //高低16位相加得总数
 }
 
 // P19
@@ -590,9 +611,27 @@ int bitCount(int x) {
  */
 int bitReverse(int x)
 {
-  x=((x&0x55555555)<<1)|((x>>1)&0x55555555);  //交换相邻位
-  x=((x&0x33333333)<<2)|((x>>2)&0x33333333);  //交换相邻2位组
-  x=((x&0x0F0F0F0F)<<4)|((x>>4)&0x0F0F0F0F);  //交换相邻4位组
-  x=((x&0x00FF00FF)<<8)|((x>>8)&0x00FF00FF);  //交换相邻字节
-  return (x<<16)|((x>>16)&0xFFFF);  //交换高低16位
+  int m1 = 0x55;
+  m1 = m1 | (m1 << 8);
+  m1 = m1 | (m1 << 16);
+
+  int m2 = 0x33;
+  m2 = m2 | (m2 << 8); //0x3333，其他以此类推
+  m2 = m2 | (m2 << 16);
+
+  int m4 = 0x0F;
+  m4 = m4 | (m4 << 8);
+  m4 = m4 | (m4 << 16);
+
+  int m8 = 0xFF;
+  m8 = m8 | (m8 << 16);
+
+  int m16 = 0xFF;
+  m16 = m16 | (m16 << 8);
+
+  x = ((x & m1) << 1) | ((x >> 1) & m1); //交换相邻位
+  x = ((x & m2) << 2) | ((x >> 2) & m2);
+  x = ((x & m4) << 4) | ((x >> 4) & m4); //交换相邻4位
+  x = ((x & m8) << 8) | ((x >> 8) & m8);
+  return (x << 16) | ((x >> 16) & m16);  //交换高低16位
 }
